@@ -22,7 +22,7 @@ public class Data
     public EventWaitHandle E3 = new EventWaitHandle(false, EventResetMode.ManualReset);
     public EventWaitHandle E4 = new EventWaitHandle(false, EventResetMode.ManualReset);
     public Mutex M1 = new Mutex();
-    public Semaphore S1 = new Semaphore(0, 3);
+    public SemaphoreSlim S1 = new SemaphoreSlim(0, 3);
     public object _lockObject = new object();
 
     public void FillDataT1()
@@ -183,6 +183,20 @@ public class Data
             Console.Write(vector[i] + " ");
         }
         Console.WriteLine();
+    }
+
+    public void CalculateStep3(int ai, int di, int threadId)
+    {
+        int[] Z_H = GetSubvector(Z, threadId);
+        int[,] MR_H = GetSubmatrixFromColumns(MR, threadId);
+
+        int[] di_Z_H = MultiplyVectorByScalar(Z_H, di);
+        int[,] MO_MR_H = MultiplyMatrices(MO, MR_H);
+        int[] R_MO_MR_H = MultiplyVectorByMatrix(R, MO_MR_H);
+        int[] di_Z_H_plus_R_MO_MR_H = AddVectors(di_Z_H, R_MO_MR_H);
+        int[] X_H = MultiplyVectorByScalar(di_Z_H_plus_R_MO_MR_H, ai);
+
+        InsertSubvectorIntoVector(X, X_H, threadId);
     }
 
     private static int Start(int threadId) => (threadId - 1) * H;

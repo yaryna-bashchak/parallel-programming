@@ -1,18 +1,26 @@
-﻿using lab3;
+﻿// Програмне забезпечення високопродуктивних комп'ютерних систем
+// Лабораторна робота №3: програмування для КС із СП. Семафори, мютекси, події, критичні секції, атомік-змінні, бар’єри
+// варіант 20
+// X = (B*Z)*(d*Z + R*(MO*MR))
+// Бащак Ярина Володимирівна
+// група ІМ-11
+// 28.03.2024
 
+using System.Diagnostics;
+using lab3;
 class Lab3
 {
     private static readonly Data data = new Data();
-    // public static int N;
-    // [DllImport("kernel32.dll")]
-    // static extern IntPtr GetCurrentThread();
-
-    // [DllImport("kernel32.dll")]
-    // static extern IntPtr SetThreadAffinityMask(IntPtr hThread, IntPtr dwThreadAffinityMask);
+    private Stopwatch stopwatch = new Stopwatch();
 
     static void Main(string[] args)
     {
+        // для виконання тільки на одному ядрі
+        // Process process = Process.GetCurrentProcess();
+        // process.ProcessorAffinity = (IntPtr)0x0001;
+
         Lab3 lab3Instance = new Lab3();
+        lab3Instance.stopwatch.Start();
 
         var t1 = new Thread(new ParameterizedThreadStart(lab3Instance.T1));
         var t2 = new Thread(new ParameterizedThreadStart(lab3Instance.T2));
@@ -35,9 +43,6 @@ class Lab3
         int threadId = (int)param;
         int a1, d1;
         Console.WriteLine($"T{threadId} start");
-
-        // встановлення номера ядра
-        // SetThreadAffinity(0);
 
         // введення МО
         data.FillDataT1();
@@ -81,9 +86,6 @@ class Lab3
         int a2, d2;
         Console.WriteLine($"T{threadId} start");
 
-        // встановлення номера ядра
-        // SetThreadAffinity(0);
-
         // введення Z, R
         data.FillDataT2();
         // синхронізація введення за допомогою бар'єру B1
@@ -125,9 +127,6 @@ class Lab3
         int threadId = (int)param;
         int a3, d3;
         Console.WriteLine($"T{threadId} start");
-
-        // встановлення номера ядра
-        // SetThreadAffinity(0);
 
         // введення B, MR
         data.FillDataT3();
@@ -171,9 +170,6 @@ class Lab3
         int a4, d4;
         Console.WriteLine($"T{threadId} start");
 
-        // встановлення номера ядра
-        // SetThreadAffinity(0);
-
         // введення d
         data.FillDataT4();
         // синхронізація введення за допомогою бар'єру B1
@@ -211,21 +207,14 @@ class Lab3
             data.S1.Wait();
         }
 
+        stopwatch.Stop();
+
         // виведення результату Х
         Data.PrintVector(data.X);
 
         Console.WriteLine($"T{threadId} finish");
-        
+        Console.WriteLine($"Time taken: {stopwatch.ElapsedMilliseconds} ms");
+
         data.B1.Dispose();
     }
-
-    // static void SetThreadAffinity(int processorNumber)
-    // {
-    //     if (OperatingSystem.IsWindows())
-    //     {
-    //         IntPtr ptrThread = GetCurrentThread();
-    //         SetThreadAffinityMask(ptrThread, new IntPtr(1 << processorNumber));
-    //         Console.WriteLine($"Потік {Thread.CurrentThread.Name} виконується на ядрі {processorNumber}");
-    //     }
-    // }
 }

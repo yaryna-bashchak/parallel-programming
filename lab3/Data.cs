@@ -14,7 +14,7 @@ public class Data
     public int[] B { get; set; } = new int[N];
     public int[] X { get; set; } = new int[N];
     public int d { get; set; }
-    public int a = 0; // Interlocked.Add(ref a, ai);
+    public int a = 0;
 
     public Barrier B1 = new Barrier(4);
     public EventWaitHandle E1 = new EventWaitHandle(false, EventResetMode.ManualReset);

@@ -14,10 +14,10 @@ class Lab3
     {
         Lab3 lab3Instance = new Lab3();
 
-        var t1 = new Thread(new ParameterizedThreadStart(lab3Instance.Func1));
-        var t2 = new Thread(new ParameterizedThreadStart(Func2));
-        var t3 = new Thread(new ParameterizedThreadStart(Func3));
-        var t4 = new Thread(new ParameterizedThreadStart(Func4));
+        var t1 = new Thread(new ParameterizedThreadStart(lab3Instance.T1));
+        var t2 = new Thread(new ParameterizedThreadStart(lab3Instance.T2));
+        var t3 = new Thread(new ParameterizedThreadStart(lab3Instance.T3));
+        var t4 = new Thread(new ParameterizedThreadStart(lab3Instance.T4));
 
         t1.Start(1);
         t2.Start(2);
@@ -28,11 +28,9 @@ class Lab3
         t2.Join();
         t3.Join();
         t4.Join();
-
-        // Data.B1.Dispose();
     }
 
-    void Func1(object param)
+    void T1(object param)
     {
         int threadId = (int)param;
         int a1, d1;
@@ -64,10 +62,9 @@ class Lab3
         data.M1.ReleaseMutex();
 
         // захист скаляру а за допомогою критичної секції - КД3
-        lock(data._lockObject)
+        lock (data._lockObject)
         {
             a1 = data.a;
-            Console.WriteLine(a1);
         }
 
         // обчислення 3: Xн = a1*(d1*Zн + R*(MO*MRн))
@@ -76,6 +73,150 @@ class Lab3
         // сигнал задачі Т4 про завершення обчислення 3 - семафор S1
         data.S1.Release();
         Console.WriteLine($"T{threadId} finish");
+    }
+
+    void T2(object param)
+    {
+        int threadId = (int)param;
+        int a2, d2;
+        Console.WriteLine($"T{threadId} start");
+
+        // встановлення номера ядра
+        // SetThreadAffinity(0);
+
+        // введення Z, R
+        data.FillDataT2();
+        // синхронізація введення за допомогою бар'єру B1
+        data.B1.SignalAndWait();
+
+        // обчислення 1: a2 = Bн*Zн
+        a2 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
+        // обчислення 2: а = а + а2 - КД1 - атомік-змінна
+        Interlocked.Add(ref data.a, a2);
+
+        // сигнал про завершення обчислення 2 - подія Е2
+        data.E2.Set();
+        // чекати, щоб всі потоки завершили обчислення 2 - події Е1, Е3, Е4
+        data.E1.WaitOne();
+        data.E3.WaitOne();
+        data.E4.WaitOne();
+
+        // захист скаляру d за допомогою мютексу М1 - КД2
+        data.M1.WaitOne();
+        d2 = data.d;
+        data.M1.ReleaseMutex();
+
+        // захист скаляру а за допомогою критичної секції - КД3
+        lock (data._lockObject)
+        {
+            a2 = data.a;
+        }
+
+        // обчислення 3: Xн = a2*(d2*Zн + R*(MO*MRн))
+        data.CalculateStep3(a2, d2, threadId);
+
+        // сигнал задачі Т4 про завершення обчислення 3 - семафор S1
+        data.S1.Release();
+        Console.WriteLine($"T{threadId} finish");
+    }
+
+    void T3(object param)
+    {
+        int threadId = (int)param;
+        int a3, d3;
+        Console.WriteLine($"T{threadId} start");
+
+        // встановлення номера ядра
+        // SetThreadAffinity(0);
+
+        // введення B, MR
+        data.FillDataT3();
+        // синхронізація введення за допомогою бар'єру B1
+        data.B1.SignalAndWait();
+
+        // обчислення 1: a3 = Bн*Zн
+        a3 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
+        // обчислення 2: а = а + а3 - КД1 - атомік-змінна
+        Interlocked.Add(ref data.a, a3);
+
+        // сигнал про завершення обчислення 2 - подія Е3
+        data.E3.Set();
+        // чекати, щоб всі потоки завершили обчислення 2 - події Е1, Е2, Е4
+        data.E1.WaitOne();
+        data.E2.WaitOne();
+        data.E4.WaitOne();
+
+        // захист скаляру d за допомогою мютексу М1 - КД2
+        data.M1.WaitOne();
+        d3 = data.d;
+        data.M1.ReleaseMutex();
+
+        // захист скаляру а за допомогою критичної секції - КД3
+        lock (data._lockObject)
+        {
+            a3 = data.a;
+        }
+
+        // обчислення 3: Xн = a3*(d3*Zн + R*(MO*MRн))
+        data.CalculateStep3(a3, d3, threadId);
+
+        // сигнал задачі Т4 про завершення обчислення 3 - семафор S1
+        data.S1.Release();
+        Console.WriteLine($"T{threadId} finish");
+    }
+
+    void T4(object param)
+    {
+        int threadId = (int)param;
+        int a4, d4;
+        Console.WriteLine($"T{threadId} start");
+
+        // встановлення номера ядра
+        // SetThreadAffinity(0);
+
+        // введення d
+        data.FillDataT4();
+        // синхронізація введення за допомогою бар'єру B1
+        data.B1.SignalAndWait();
+
+        // обчислення 1: a4 = Bн*Zн
+        a4 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
+        // обчислення 2: а = а + а4 - КД1 - атомік-змінна
+        Interlocked.Add(ref data.a, a4);
+
+        // сигнал про завершення обчислення 2 - подія Е4
+        data.E4.Set();
+        // чекати, щоб всі потоки завершили обчислення 2 - події E1, Е2, Е3
+        data.E1.WaitOne();
+        data.E2.WaitOne();
+        data.E3.WaitOne();
+
+        // захист скаляру d за допомогою мютексу М1 - КД2
+        data.M1.WaitOne();
+        d4 = data.d;
+        data.M1.ReleaseMutex();
+
+        // захист скаляру а за допомогою критичної секції - КД3
+        lock (data._lockObject)
+        {
+            a4 = data.a;
+        }
+
+        // обчислення 3: Xн = a4*(d4*Zн + R*(MO*MRн))
+        data.CalculateStep3(a4, d4, threadId);
+
+        // чекати, щоб всі потоки завершили обчислення 3 - семафор S1
+        for (int i = 0; i < 3; i++)
+        {
+            data.S1.Wait();
+        }
+
+        // виведення результату Х
+        Data.PrintVector(data.X);
+
+        Console.WriteLine($"T{threadId} finish");
+        
+        data.B1.Dispose();
     }
 
     // static void SetThreadAffinity(int processorNumber)

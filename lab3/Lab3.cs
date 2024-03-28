@@ -51,7 +51,7 @@ class Lab3
 
         // обчислення 1: a1 = Bн*Zн
         a1 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
-        // обчислення 2: а = а + а1 - КД1 - атомік-змінна
+        // обчислення 2: а = а + а1 - КД1 - атомік-змінна (атомарна операція)
         Interlocked.Add(ref data.a, a1);
 
         // сигнал про завершення обчислення 2 - подія Е1
@@ -93,7 +93,7 @@ class Lab3
 
         // обчислення 1: a2 = Bн*Zн
         a2 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
-        // обчислення 2: а = а + а2 - КД1 - атомік-змінна
+        // обчислення 2: а = а + а2 - КД1 - атомік-змінна (атомарна операція)
         Interlocked.Add(ref data.a, a2);
 
         // сигнал про завершення обчислення 2 - подія Е2
@@ -135,7 +135,7 @@ class Lab3
 
         // обчислення 1: a3 = Bн*Zн
         a3 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
-        // обчислення 2: а = а + а3 - КД1 - атомік-змінна
+        // обчислення 2: а = а + а3 - КД1 - атомік-змінна (атомарна операція)
         Interlocked.Add(ref data.a, a3);
 
         // сигнал про завершення обчислення 2 - подія Е3
@@ -177,7 +177,7 @@ class Lab3
 
         // обчислення 1: a4 = Bн*Zн
         a4 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
-        // обчислення 2: а = а + а4 - КД1 - атомік-змінна
+        // обчислення 2: а = а + а4 - КД1 - атомік-змінна (атомарна операція)
         Interlocked.Add(ref data.a, a4);
 
         // сигнал про завершення обчислення 2 - подія Е4

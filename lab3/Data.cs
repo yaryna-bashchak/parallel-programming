@@ -12,7 +12,7 @@ public class Data
     public int[] Z { get; set; } = new int[N];
     public int[] R { get; set; } = new int[N];
     public int[] B { get; set; } = new int[N];
-    public int[] X { get; set; } = new int[N];
+    public long[] X { get; set; } = new long[N];
     public int d { get; set; }
     public int a = 0;
 
@@ -125,6 +125,18 @@ public class Data
         return result;
     }
 
+    public static long[] MultiplyVectorByScalar(long[] vector, int scalar)
+    {
+        long[] result = new long[vector.Length];
+
+        for (int i = 0; i < vector.Length; i++)
+        {
+            result[i] = vector[i] * scalar;
+        }
+
+        return result;
+    }
+
     public static int[] AddVectors(int[] vector1, int[] vector2)
     {
         int[] result = new int[vector1.Length];
@@ -165,7 +177,7 @@ public class Data
         return vector.Skip(start).Take(end - start).ToArray();
     }
 
-    public static void InsertSubvectorIntoVector(int[] targetVector, int[] subvector, int threadId)
+    public static void InsertSubvectorIntoVector(long[] targetVector, long[] subvector, int threadId)
     {
         int start = Start(threadId);
         int size = subvector.GetLength(0);
@@ -176,7 +188,7 @@ public class Data
         }
     }
 
-    public static void PrintVector(int[] vector)
+    public static void PrintVector(long[] vector)
     {
         for (int i = 0; i < vector.Length; i++)
         {
@@ -194,27 +206,11 @@ public class Data
         int[,] MO_MR_H = MultiplyMatrices(MO, MR_H);
         int[] R_MO_MR_H = MultiplyVectorByMatrix(R, MO_MR_H);
         int[] di_Z_H_plus_R_MO_MR_H = AddVectors(di_Z_H, R_MO_MR_H);
-        int[] X_H = MultiplyVectorByScalar(di_Z_H_plus_R_MO_MR_H, ai);
+        long[] X_H = MultiplyVectorByScalar(di_Z_H_plus_R_MO_MR_H.Select(x => (long)x).ToArray(), ai);
 
         InsertSubvectorIntoVector(X, X_H, threadId);
     }
 
     private static int Start(int threadId) => (threadId - 1) * H;
     private static int End(int threadId) => threadId * H;
-
-    // public static void InsertSubmatrixIntoMatrix(int[,] targetMatrix, int[,] submatrix, int threadId)
-    // {
-    //     int start = Start(threadId);
-
-    //     int rows = targetMatrix.GetLength(0);
-    //     int submatrixColumns = submatrix.GetLength(1);
-
-    //     for (int i = 0; i < rows; i++)
-    //     {
-    //         for (int j = 0; j < submatrixColumns; j++)
-    //         {
-    //             targetMatrix[i, start + j] = submatrix[i, j];
-    //         }
-    //     }
-    // }
 }

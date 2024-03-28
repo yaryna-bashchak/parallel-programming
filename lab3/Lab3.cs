@@ -41,29 +41,39 @@ class Lab3
         // встановлення номера ядра
         // SetThreadAffinity(0);
 
+        // введення МО
         data.FillDataT1();
+        // синхронізація введення за допомогою бар'єру B1
         data.B1.SignalAndWait();
 
+        // обчислення 1: a1 = Bн*Zн
         a1 = Data.MultiplyVectors(Data.GetSubvector(data.B, threadId), Data.GetSubvector(data.Z, threadId));
+        // обчислення 2: а = а + а1 - КД1 - атомік-змінна
         Interlocked.Add(ref data.a, a1);
 
+        // сигнал про завершення обчислення 2 - подія Е1
         data.E1.Set();
+        // чекати, щоб всі потоки завершили обчислення 2 - події Е2, Е3, Е4
         data.E2.WaitOne();
         data.E3.WaitOne();
         data.E4.WaitOne();
 
+        // захист скаляру d за допомогою мютексу М1 - КД2
         data.M1.WaitOne();
         d1 = data.d;
         data.M1.ReleaseMutex();
 
+        // захист скаляру а за допомогою критичної секції - КД3
         lock(data._lockObject)
         {
             a1 = data.a;
             Console.WriteLine(a1);
         }
 
+        // обчислення 3: Xн = a1*(d1*Zн + R*(MO*MRн))
         data.CalculateStep3(a1, d1, threadId);
 
+        // сигнал задачі Т4 про завершення обчислення 3 - семафор S1
         data.S1.Release();
         Console.WriteLine($"T{threadId} finish");
     }

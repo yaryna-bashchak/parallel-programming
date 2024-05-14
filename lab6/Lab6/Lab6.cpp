@@ -8,8 +8,8 @@
 using namespace std;
 
 const int N = 16;
-const int P = 8;
-const int H = N / P;
+const int Pr = 8;
+const int H = N / Pr;
 
 void initializeVector(vector<int>&);
 void initializeMatrix(vector<vector<int>>&);
@@ -21,8 +21,8 @@ void extractFromBuffer(vector<int>&, vector<int>&, size_t&, size_t);
 void extractFromBuffer(vector<int>&, vector<vector<int>>&, size_t&, size_t, size_t);
 vector<int> selectPartsH(const vector<int>&, const vector<int>&);
 vector<vector<int>> selectPartsH(const vector<vector<int>>&, const vector<int>&);
-//void matrixToVector(const vector<vector<int>>&, vector<int>&, int);
-//void vectorToMatrix(const vector<int>&, vector<vector<int>>&, int);
+vector<vector<int>> multiplyMatrices(const vector<vector<int>>&, const vector<vector<int>>&);
+vector<int> multiplyMatrixVector(const vector<vector<int>>&, const vector<int>&);
 
 int main(int argc, char* argv[]) {
 	MPI_Init(&argc, &argv);
@@ -362,39 +362,218 @@ int main(int argc, char* argv[]) {
 		MPI_Send(&send71[0], static_cast<int>(send71.size()), MPI_INT, 6, 0, MPI_COMM_WORLD);
 	}
 
-	// Виведення отриманих даних у кожному потоці
-	//if (rank == 0 || rank == 1)
-	//	for (int i = 0; i < H; i++) {
-	//		cout << "Z " << rank << ": " << Z_H[i] << endl;
-	//	}
+	// Обчислення 1
+	vector<int> P_H(H);
+	for (size_t i = 0; i < H; i++)
+	{
+		P_H[i] = D_H[i] + Z_H[i];
+	}
 
-	//if (rank == 2 || rank == 3)
-	//	for (int i = 0; i < H; i++) {
-	//		cout << "B " << rank << ": " << B_H[i] << endl;
-	//	}
+	// Обчислення 2
+	int mi = 0;
+	for (size_t i = 0; i < H; i++)
+	{
+		mi += B_H[i] * C_H[i];
+	}
 
-	if (rank == 4 || rank == 5 || rank == 6 || rank == 7)
-		for (int i = 0; i < N; i++) {
-			cout << "MR " << rank << ": ";
-			for (int j = 0; j < H; ++j) {
-				cout << MR_H[i][j] << " ";
-			}
-			cout << endl;
+	vector<int> P;
+	int m;
+
+	// Передача mi і P_H
+	if (rank == 0 || rank == 2 || rank == 3 || rank == 6 || rank == 7)
+	{
+		// Отримує буфер
+		int n_parts = (rank >= 2 && rank <= 3) ? (4 - rank) : (rank + 7) % 8 - 4;
+		int rank_from = (rank >= 2 && rank <= 3) ? (rank + 1) : (rank + 7) % 8;
+		vector<int> recv_buff(n_parts * H + 1);
+		int m_received;
+		vector<int> P_received;
+		MPI_Recv(recv_buff.data(), static_cast<int>(recv_buff.size()), MPI_INT, rank_from, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Розпаковує буфер
+		size_t index = 0;
+		extractFromBuffer(recv_buff, m_received, index);
+		extractFromBuffer(recv_buff, P_received, index, n_parts * H);
+
+		// Обчислення 3
+		mi += m_received;
+
+		// Формує буфер для відправлення
+		vector<int> send_buff;
+		appendToBuffer(send_buff, mi);
+		if (rank <= 4) {
+			appendToBuffer(send_buff, P_H);
+			appendToBuffer(send_buff, P_received);
 		}
+		else {
+			appendToBuffer(send_buff, P_received);
+			appendToBuffer(send_buff, P_H);
+		}
+
+		// Передає буфер
+		int rank_to = (rank >= 2 && rank <= 3) ? (rank - 1) : (rank + 1) % 8;
+		MPI_Send(&send_buff[0], static_cast<int>(send_buff.size()), MPI_INT, rank_to, 0, MPI_COMM_WORLD);
+	}
+	else if (rank == 4 || rank == 5)
+	{
+		// Формує буфер для відправлення
+		vector<int> send_buff;
+		appendToBuffer(send_buff, mi);
+		appendToBuffer(send_buff, P_H);
+
+		// Передає буфер
+		MPI_Send(&send_buff[0], static_cast<int>(send_buff.size()), MPI_INT, (rank <= 4) ? rank - 1 : rank + 1, 0, MPI_COMM_WORLD);
+	}
+	else if (rank == 1)
+	{
+		// Отримує буфери від 0 і 2
+		vector<int> recv32(3 * H + 1);
+		vector<int> recv12(4 * H + 1);
+		int m3, m1;
+		vector<int> P_3H, P_4H;
+		MPI_Recv(recv32.data(), static_cast<int>(recv32.size()), MPI_INT, 2, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Recv(recv12.data(), static_cast<int>(recv12.size()), MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Розпаковує буфери
+		size_t index = 0;
+		extractFromBuffer(recv32, m3, index);
+		extractFromBuffer(recv32, P_3H, index, 3 * H);
+		index = 0;
+		extractFromBuffer(recv12, m1, index);
+		extractFromBuffer(recv12, P_4H, index, 4 * H);
+
+		// Обчислення 3
+		mi += m3;
+		mi += m1;
+		m = mi;
+
+		// Формує вектор Р з частин
+		appendToBuffer(P, selectPartsH(P_4H, { 0 }));
+		appendToBuffer(P, P_H);
+		appendToBuffer(P, P_3H);
+		appendToBuffer(P, selectPartsH(P_4H, { 1, 2, 3 }));
+	}
+
+	// Новий комунікатор з рангами 0, 1, 2, щоб виконати колективну операцію
+	MPI_Group world_group, custom_group;
+	MPI_Comm custom_comm;
+	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+	int members[] = { 0, 1, 2 };
+	MPI_Group_incl(world_group, 3, members, &custom_group);
+	MPI_Comm_create(MPI_COMM_WORLD, custom_group, &custom_comm);
+
+	// Перевірка, чи процес належить до нового комунікатора
+	if (custom_comm != MPI_COMM_NULL) {
+		int custom_rank;
+		MPI_Comm_rank(custom_comm, &custom_rank);
+
+		// Розсилка вектора P і m з процесу 1 до 0 і 2
+		P.resize(N);
+		MPI_Bcast(&P[0], N, MPI_INT, 1, custom_comm);
+		MPI_Bcast(&m, 1, MPI_INT, 1, custom_comm);
+	}
+
+	// Очищення комунікатора
+	if (custom_group != MPI_GROUP_NULL) MPI_Group_free(&custom_group);
+	if (custom_comm != MPI_COMM_NULL) MPI_Comm_free(&custom_comm);
+	MPI_Group_free(&world_group);
+
+	// Продовження пересилання готових m i P
+	if (rank == 3 || rank == 4 || rank == 5 || rank == 6 || rank == 7)
+	{
+		// Отримує буфер
+		int rank_from = (rank <= 4) ? rank - 1 : (rank + 1) % 8;
+		vector<int> recv_buff(N + 1);
+		MPI_Recv(recv_buff.data(), static_cast<int>(recv_buff.size()), MPI_INT, rank_from, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Розпаковує буфер
+		size_t index = 0;
+		extractFromBuffer(recv_buff, m, index);
+		extractFromBuffer(recv_buff, P, index, N);
+	}
+	if (rank == 0 || rank == 2 || rank == 3 || rank == 6 || rank == 7)
+	{
+		// Формує буфер для відправлення
+		int rank_to = (rank == 2 || rank == 3) ? rank + 1 : (rank + 7) % 8;
+		vector<int> send_buff;
+		appendToBuffer(send_buff, m);
+		appendToBuffer(send_buff, P);
+
+		// Передає буфер
+		MPI_Send(&send_buff[0], static_cast<int>(send_buff.size()), MPI_INT, rank_to, 0, MPI_COMM_WORLD);
+	}
+
+	// Обчислення 4
+	vector<int> A_H(H);
+	auto MX_MR_H = multiplyMatrices(MX, MR_H);
+	auto P_MX_MR_H = multiplyMatrixVector(MX_MR_H, P);
+
+	for (size_t i = 0; i < H; i++)
+	{
+		A_H[i] = m * Z_H[i] - P_MX_MR_H[i];
+	}
+
+	// Пересилання готових A_H
+	vector<int> recv_buff;
+	if (rank != 4 && rank != 5)
+	{
+		// Отримує буфер
+		int rank_from = (rank >= 1 && rank <= 3) ? rank + 1 : (rank + 7) % 8;
+		int n_parts = (rank >= 1 && rank <= 3) ? (4 - rank) : (rank + 7) % 8 - 4;
+		vector<int> A_received;
+		recv_buff.resize(n_parts * H);
+		MPI_Recv(recv_buff.data(), static_cast<int>(recv_buff.size()), MPI_INT, rank_from, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+
+	if (rank != 1)
+	{
+		// Формує буфер для відправлення
+		int rank_to = (rank >= 2 && rank <= 4) ? rank - 1 : (rank + 1) % 8;
+		vector<int> send_buff;
+
+		if (rank <= 4)
+		{
+			appendToBuffer(send_buff, A_H);
+			appendToBuffer(send_buff, recv_buff);
+		}
+		else
+		{
+			appendToBuffer(send_buff, recv_buff);
+			appendToBuffer(send_buff, A_H);
+		}
+
+		// Передає буфер
+		MPI_Send(&send_buff[0], static_cast<int>(send_buff.size()), MPI_INT, rank_to, 0, MPI_COMM_WORLD);
+	}
+	else
+	{
+		// Отримує буфер
+		vector<int> recv13(4 * H);
+		MPI_Recv(recv13.data(), static_cast<int>(recv13.size()), MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Складає А з отриманих частин
+		vector<int> A;
+		appendToBuffer(A, selectPartsH(recv13, { 0 }));
+		appendToBuffer(A, A_H);
+		appendToBuffer(A, recv_buff);
+		appendToBuffer(A, selectPartsH(recv13, { 1, 2, 3 }));
+
+		// Виведення результату
+		cout << "Rank: " << rank << " vector A: ";
+		for (auto& num : A) {
+			cout << num << " ";
+		}
+		cout << endl;
+	}
 
 	MPI_Finalize();
 	return 0;
 }
 
-//for (int i : recv41) {
-//	cout << i << " ";
-//}
-//cout << endl;
-
 void initializeVector(vector<int>& vector) {
 	vector.resize(N);
 	for (int i = 0; i < N; ++i) {
-		vector[i] = i + 1;
+		vector[i] = 1;
 	}
 }
 
@@ -402,7 +581,7 @@ void initializeMatrix(vector<vector<int>>& matrix) {
 	matrix.resize(N, vector<int>(N));
 	for (int i = 0; i < N; ++i) {
 		for (int j = 0; j < N; ++j) {
-			matrix[i][j] = j + 1 + i * N;
+			matrix[i][j] = 1;
 		}
 	}
 }
@@ -472,74 +651,36 @@ vector<vector<int>> selectPartsH(const vector<vector<int>>& matrix, const vector
 
 	return selectedParts;
 }
-//void matrixToVector(const vector<vector<int>>& matrix, vector<int>& vector, int n) {
-//    vector.resize(n * n);
-//    for (int i = 0; i < n; ++i) {
-//        for (int j = 0; j < n; ++j) {
-//            vector[j * n + i] = matrix[i][j]; // Транспонування для правильного поділу за стовпцями
-//        }
-//    }
-//}
-//
-//void vectorToMatrix(const vector<int>& array, vector<vector<int>>& matrix, int n) {
-//    matrix.resize(n, vector<int>(n));
-//    for (int i = 0; i < n; ++i) {
-//        for (int j = 0; j < n; ++j) {
-//            matrix[i][j] = array[j * n + i]; // Зворотне транспонування
-//        }
-//    }
-//}
-//void initializeMatrix(vector<vector<int>>& matrix, int n) {
-//    matrix.resize(n, vector<int>(n));
-//    for (int i = 0; i < n; ++i) {
-//        for (int j = 0; j < n; ++j) {
-//            matrix[i][j] = 1;
-//        }
-//    }
-//}
-//
-//int main(int argc, char* argv[]) {
-//    MPI_Init(&argc, &argv);
-//
-//    int rank, size;
-//    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-//    MPI_Comm_size(MPI_COMM_WORLD, &size);
-//
-//    const int n = 16;
-//    vector<int> A;
-//    if (rank == 1) {
-//        A.resize(n);
-//        for (int i = 0; i < n; ++i) {
-//            A[i] = i + 1;
-//        }
-//    }
-//
-//    int chunk_size = n / size; // Розмір частини, що передається
-//    vector<int> recv_chunk(chunk_size); // Масив для отримання частини
-//
-//    if (rank == 1) {
-//        // Потік 1 розсилає чверть масиву кожному з наступних потоків, крім себе
-//        for (int i = 0; i < size; ++i) {
-//            int target = (1 + i) % size;
-//            if (target != rank) { // Відправляємо дані всім іншим потокам, крім себе
-//                MPI_Send(&A[i * chunk_size], chunk_size, MPI_INT, target, 0, MPI_COMM_WORLD);
-//            }
-//        }
-//    }
-//
-//    // Кожен потік отримує свою частину
-//    if (rank != 1) { // Окрім потоку, що відправляє
-//        MPI_Recv(recv_chunk.data(), chunk_size, MPI_INT, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-//    }
-//
-//    // Виведення отриманих даних
-//    cout << "Process " << rank << " received: ";
-//    for (int i = 0; i < chunk_size; ++i) {
-//        cout << recv_chunk[i] << " ";
-//    }
-//    cout << endl;
-//
-//    MPI_Finalize();
-//    return 0;
-//}
 
+// Функція для множення двох матриць
+vector<vector<int>> multiplyMatrices(const vector<vector<int>>& matrix1, const vector<vector<int>>& matrix2) {
+	size_t rows1 = matrix1.size();
+	size_t cols1 = matrix1[0].size();
+	size_t cols2 = matrix2[0].size();
+	vector<vector<int>> result(rows1, vector<int>(cols2, 0));
+	for (size_t i = 0; i < rows1; ++i) {
+		for (size_t j = 0; j < cols2; ++j) {
+			for (size_t k = 0; k < cols1; ++k) {
+				result[i][j] += matrix1[i][k] * matrix2[k][j];
+			}
+		}
+	}
+	return result;
+}
+
+// Функція для множення вектора на матрицю
+vector<int> multiplyMatrixVector(const vector<vector<int>>& matrix, const vector<int>& vec) {
+	auto n = vec.size();
+	auto m = matrix[0].size();
+
+	vector<int> result(m);
+
+	for (int i = 0; i < m; i++) {
+		result[i] = 0;
+		for (int j = 0; j < n; j++) {
+			result[i] += vec[j] * matrix[j][i];
+		}
+	}
+
+	return result;
+}
